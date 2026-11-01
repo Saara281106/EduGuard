@@ -8,12 +8,24 @@ import {
 } from 'react'
 import { computeRisk } from '../lib/riskEngine.js'
 import { todayISO } from '../lib/format.js'
-import { loadStudents, saveStudents, clearStoredStudents } from '../lib/storage.js'
+import {
+  loadStudents,
+  saveStudents,
+  clearStoredStudents,
+  loadActiveDatasetCache,
+  saveActiveDatasetCache,
+  clearActiveDatasetCache,
+} from '../lib/storage.js'
 import { createSampleStudents } from '../data/sampleStudents.js'
+import { buildStudentsFromDataset } from '../lib/dataset.js'
+import { fetchActiveDataset, clearActiveDataset } from '../lib/api.js'
 
 const AppContext = createContext(null)
 
 function withRisk(student) {
+  // Uploaded dataset records keep the ML prediction generated at upload time.
+  if (student?.dataSource === 'dataset') return student
+
   const risk = computeRisk(student)
   return { ...student, ...risk }
 }
@@ -27,12 +39,67 @@ function nextStudentId(students) {
 }
 
 export function AppProvider({ children }) {
-  const [students, setStudents] = useState(loadStudents)
+  const [cachedDataset] = useState(loadActiveDatasetCache)
+  const [students, setStudents] = useState(() =>
+    cachedDataset?.students?.length ? cachedDataset.students : loadStudents(),
+  )
+  const [activeDataset, setActiveDataset] = useState(
+    () => cachedDataset?.dataset || null,
+  )
+  const [datasetLoading, setDatasetLoading] = useState(true)
   const [toast, setToast] = useState(null)
 
+  // Restore the active uploaded dataset from the Flask backend on reload.
   useEffect(() => {
-    saveStudents(students)
-  }, [students])
+    let cancelled = false
+
+    fetchActiveDataset()
+      .then((data) => {
+        if (cancelled) return
+
+        if (data?.active && data.dataset) {
+          const dataset = data.dataset
+          const cache = loadActiveDatasetCache()
+          const restored =
+            cache?.dataset?.id === dataset.id && cache.students?.length
+              ? cache.students
+              : buildStudentsFromDataset(
+                  data.records || [],
+                  data.predictions || [],
+                  dataset,
+                )
+
+          setActiveDataset(dataset)
+          setStudents(restored)
+          return
+        }
+
+        // The backend has no active dataset: fall back to the local demo data.
+        clearActiveDatasetCache()
+        setActiveDataset(null)
+        setStudents(loadStudents())
+      })
+      .catch((error) => {
+        // Keep the cached dataset visible if the backend is not running.
+        console.warn('Could not load the active dataset from the backend.', error)
+      })
+      .finally(() => {
+        if (!cancelled) setDatasetLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  useEffect(() => {
+    if (activeDataset) {
+      saveActiveDatasetCache(activeDataset, students)
+    } else {
+      clearActiveDatasetCache()
+      saveStudents(students)
+    }
+  }, [students, activeDataset])
 
   useEffect(() => {
     if (!toast) return undefined
@@ -43,6 +110,31 @@ export function AppProvider({ children }) {
   const notify = useCallback((message, type = 'success') => {
     setToast({ id: Date.now(), message, type })
   }, [])
+
+  const applyDataset = useCallback(
+    (payload) => {
+      const dataset =
+        payload?.dataset || {
+          id: `dataset-${Date.now()}`,
+          filename: 'Uploaded dataset',
+          uploadedAt: new Date().toISOString(),
+          totalStudents: payload?.predictions?.length || 0,
+        }
+      const nextStudents = buildStudentsFromDataset(
+        payload?.records || [],
+        payload?.predictions || [],
+        dataset,
+      )
+
+      setActiveDataset(dataset)
+      setStudents(nextStudents)
+      notify(
+        `${nextStudents.length} students loaded from ${dataset.filename}.`,
+      )
+      return nextStudents.length
+    },
+    [notify],
+  )
 
   const enrichedStudents = useMemo(
     () => students.map((student) => withRisk(student)),
@@ -113,6 +205,9 @@ export function AppProvider({ children }) {
 
   const addProgressUpdate = useCallback(
     (studentId, payload) => {
+      const isDatasetRecord =
+        students.find((student) => student.id === studentId)?.dataSource === 'dataset'
+
       setStudents((previous) =>
         previous.map((student) => {
           if (student.id !== studentId) return student
@@ -141,9 +236,13 @@ export function AppProvider({ children }) {
           })
         }),
       )
-      notify('Progress update saved. Risk score recalculated.')
+      notify(
+        isDatasetRecord
+          ? 'Progress update saved. The ML prediction stays fixed to the uploaded dataset.'
+          : 'Progress update saved. Risk score recalculated.',
+      )
     },
-    [notify],
+    [notify, students],
   )
 
   const assignIntervention = useCallback(
@@ -223,16 +322,26 @@ export function AppProvider({ children }) {
     [notify],
   )
 
-  const resetData = useCallback(() => {
+  const resetData = useCallback(async () => {
+    try {
+      await clearActiveDataset()
+    } catch (error) {
+      console.warn('Could not clear the active dataset on the backend.', error)
+    }
+
+    clearActiveDatasetCache()
     clearStoredStudents()
-    const sample = createSampleStudents()
-    setStudents(sample)
-    notify('Demo data restored. All local changes were reset.')
+    setActiveDataset(null)
+    setStudents(createSampleStudents())
+    notify('Active dataset removed. Demo data restored.')
   }, [notify])
 
   const value = useMemo(
     () => ({
       students: enrichedStudents,
+      activeDataset,
+      datasetLoading,
+      applyDataset,
       addStudent,
       updateStudent,
       addProgressUpdate,
@@ -245,6 +354,9 @@ export function AppProvider({ children }) {
     }),
     [
       enrichedStudents,
+      activeDataset,
+      datasetLoading,
+      applyDataset,
       addStudent,
       updateStudent,
       addProgressUpdate,

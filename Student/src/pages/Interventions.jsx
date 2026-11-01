@@ -20,7 +20,7 @@ import { INTERVENTION_STATUSES, INTERVENTION_TYPES } from '../lib/riskEngine.js'
 import { formatDate, percent } from '../lib/format.js'
 
 export default function Interventions() {
-  const { students, updateIntervention, deleteIntervention } = useApp()
+  const { students, activeDataset, updateIntervention, deleteIntervention } = useApp()
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('All')
   const [type, setType] = useState('All')
@@ -78,9 +78,13 @@ export default function Interventions() {
   return (
     <>
       <PageHeader
-        eyebrow="Support actions"
+        eyebrow={activeDataset ? `Active dataset · ${activeDataset.filename}` : 'Support actions'}
         title="Intervention management"
-        subtitle="Assign, annotate and track every support action from pending to completed."
+        subtitle={
+          activeDataset
+            ? 'Interventions are linked to students in the active uploaded dataset.'
+            : 'Assign, annotate and track every support action from pending to completed.'
+        }
         actions={
           <button type="button" className="btn btn-primary" onClick={() => setAssignOpen(true)}>
             <Plus size={17} />

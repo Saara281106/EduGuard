@@ -4,18 +4,29 @@ import RiskBadge from './RiskBadge.jsx'
 
 function FeeChip({ status }) {
   const className =
-    status === 'Paid' ? 'fee-paid' : status === 'Partial' ? 'fee-partial' : 'fee-pending'
-  return <span className={`fee-chip ${className}`}>{status}</span>
+    status === 'Paid'
+      ? 'fee-paid'
+      : status === 'Partial'
+        ? 'fee-partial'
+        : status === 'Pending'
+          ? 'fee-pending'
+          : 'fee-unknown'
+  return <span className={`fee-chip ${className}`}>{status || 'Not provided'}</span>
 }
 
 function Metric({ value, low }) {
+  const numeric = Number(value)
+  const available = value !== null && value !== undefined && Number.isFinite(numeric)
+
   return (
     <div className="table-metric">
-      <span className={low ? 'metric-low' : ''}>{value}%</span>
+      <span className={low ? 'metric-low' : ''}>
+        {available ? `${numeric}%` : '—'}
+      </span>
       <span className="mini-track">
         <span
           className={`mini-fill ${low ? 'mini-fill-low' : ''}`}
-          style={{ width: `${Math.max(0, Math.min(100, value))}%` }}
+          style={{ width: available ? `${Math.max(0, Math.min(100, numeric))}%` : '0%' }}
         />
       </span>
     </div>
@@ -66,20 +77,28 @@ export default function StudentTable({ students, onView, onEdit }) {
                 </div>
               </td>
               <td>
-                <span className={`type-chip type-${student.institutionType.toLowerCase()}`}>
-                  {student.institutionType}
+                <span
+                  className={`type-chip type-${String(student.institutionType || 'other')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')}`}
+                >
+                  {student.institutionType || 'Not specified'}
                 </span>
               </td>
               <td>
                 {student.institutionType === 'School' ? (
                   <div className="stacked-cell">
-                    <span>Class {student.className}</span>
-                    <span>Section {student.section}</span>
+                    <span>Class {student.className || '—'}</span>
+                    <span>Section {student.section || '—'}</span>
                   </div>
                 ) : (
                   <div className="stacked-cell">
-                    <span>{student.department}</span>
-                    <span>Semester {student.semester}</span>
+                    <span>{student.department || 'Not provided'}</span>
+                    <span>
+                      {student.semester !== null && student.semester !== undefined
+                        ? `Semester ${student.semester}`
+                        : 'Semester not provided'}
+                    </span>
                   </div>
                 )}
               </td>
@@ -112,15 +131,17 @@ export default function StudentTable({ students, onView, onEdit }) {
                   >
                     <Eye size={16} />
                   </button>
-                  <button
-                    type="button"
-                    className="icon-btn icon-btn-soft"
-                    onClick={() => onEdit(student)}
-                    title={`Edit ${student.name}`}
-                    aria-label={`Edit ${student.name}`}
-                  >
-                    <Pencil size={15} />
-                  </button>
+                  {student.dataSource !== 'dataset' && (
+                    <button
+                      type="button"
+                      className="icon-btn icon-btn-soft"
+                      onClick={() => onEdit(student)}
+                      title={`Edit ${student.name}`}
+                      aria-label={`Edit ${student.name}`}
+                    >
+                      <Pencil size={15} />
+                    </button>
+                  )}
                 </div>
               </td>
             </tr>

@@ -1,14 +1,21 @@
 # EduGuard — School/College Dropout Early-Warning System
 
-EduGuard is a front-end hackathon MVP that helps schools and colleges spot students at risk of dropping out, understand **why** they are at risk, assign support interventions, and track whether those interventions are working.
+EduGuard is an education analytics dashboard that helps schools and colleges spot students at risk of dropping out, understand the contributing indicators, assign support interventions, and track progress after support.
 
-Everything runs in the browser. There is no backend, database, external API, or machine-learning service.
+The project has two parts:
 
-> **Important:** the risk score is an **illustrative, transparent rule-based model** designed for a demo. It is **not** a validated ML model and must not be used for real academic decisions without review by qualified staff.
+1. **React front end** — dashboard, student records, risk explorer, profiles, interventions, and progress tracking.
+2. **Flask ML service** — validates an uploaded CSV/XLSX dataset, runs the trained dropout model, and stores the active dataset.
+
+The front end also works without the backend by falling back to a built-in demo cohort and a transparent, rule-based risk score.
+
+> **Responsible-use note:** the ML predictions and rule-based scores are prototype outputs. They are not a validated dropout diagnosis and should never be the sole basis for decisions about a student. Use them to prioritise human review and support.
 
 ---
 
 ## Quick start
+
+### 1. Front end
 
 ```bash
 npm install
@@ -17,67 +24,173 @@ npm run dev
 
 Open the URL printed by Vite (usually `http://localhost:5173`).
 
-To create a production build:
+Production build:
 
 ```bash
 npm run build
 npm run preview
 ```
 
-> On Windows PowerShell, if `npm` is blocked by the execution policy, use `npm.cmd` instead (for example `npm.cmd run dev`).
+> On Windows PowerShell, if `npm` is blocked by the execution policy, use `npm.cmd` (for example `npm.cmd run dev`).
+
+### 2. ML backend (optional but required for dataset upload)
+
+The backend lives in `ml-analysis/`.
+
+**Windows (PowerShell):**
+
+```powershell
+cd ml-analysis
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python app.py
+```
+
+**macOS / Linux:**
+
+```bash
+cd ml-analysis
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+python app.py
+```
+
+The API starts at `http://127.0.0.1:5000`. Keep it running while using the **Upload Dataset** page.
+
+To point the front end at a different API URL, create a `.env` file in the project root:
+
+```
+VITE_API_URL=http://127.0.0.1:5000
+```
+
+### Regenerating the ML artifacts
+
+The ML backend was already trained: `ml-analysis/model/eduguard_model.pkl` and `ml-analysis/data/studentDataset.csv` are included. To rebuild them from scratch:
+
+```powershell
+cd ml-analysis
+python generate_data.py   # writes data/studentDataset.csv + public/studentDataset.csv
+python train_model.py     # writes model/eduguard_model.pkl (hold-out accuracy is printed)
+```
+
+`train_model.py --skip-data` retrains without regenerating the CSVs. `notebooks/analysis.ipynb` walks through the exploratory analysis and trains the same model interactively.
+
+---
+
+## Using EduGuard
+
+1. Start the front end and (for ML mode) the Flask backend.
+2. Open **Upload Dataset** and select a CSV or XLSX file.
+3. The backend validates the file, runs the trained model, and returns a dropout probability and predicted outcome for every student.
+4. The active dataset is saved in SQLite and restored automatically on reload.
+5. Dashboard, Students, Risk Prediction, Student Profile, Interventions, and Progress Tracking all use the uploaded records.
+6. If no dataset is active, the app falls back to the built-in 60-student demo cohort for student management, interventions, and progress.
+
+### Dataset requirements
+
+- Formats: `.csv` or `.xlsx`, maximum 10 MB.
+- `student_id` values must be present and unique.
+- No empty values in the required columns.
+- Percentage columns must be between 0 and 100; `previous_cgpa` must be between 0 and 10.
+- Count columns cannot be negative.
+
+Required columns:
+
+```
+student_id
+attendance_percentage
+internal_marks_percentage
+semester_marks_percentage
+backlogs
+assignment_completion_percentage
+previous_cgpa
+fee_status
+scholarship
+financial_issue
+lms_logins_per_month
+library_visits_per_month
+class_participation
+mentor_meetings_per_semester
+```
+
+Allowed categorical values:
+
+- `fee_status`: `Paid`, `Partially Paid`, `Unpaid`
+- `scholarship`: `Yes`, `No`
+- `financial_issue`: `Yes`, `No`
+- `class_participation`: `High`, `Medium`, `Low`
+
+Optional descriptive columns such as `student_name`, `institution_type`, `institution_name`, `class_name`, `section`, `department`, `semester`, `hostel_status`, `teacher_remarks`, and `mentor_notes` are shown when present.
+
+A ready-to-upload sample file is included at `public/studentDataset.csv`.
 
 ---
 
 ## Features
 
 ### Dashboard
-- Live counts of all students plus Low / Medium / High risk totals.
-- Risk distribution pie chart, attendance-vs-marks bar chart, and a high-risk watchlist.
-- Institution switch between Schools and Colleges; all numbers are derived from the current records.
+- Live totals for uploaded students and Low / Medium / High risk.
+- Risk distribution donut chart and attendance-vs-marks comparison by risk group.
+- High-risk watchlist ranked by predicted dropout probability.
+- Support pipeline summary for interventions in the active dataset.
+- Clear empty state with a direct link to dataset upload when no dataset is active.
 
 ### Student management
-- Search by student name or ID.
-- Filter by institution type, risk category, and class/department.
-- Paginated table with risk badges and quick profile access.
-- Add new students and edit existing records through one form.
-- School fields: class, section, class teacher.
-- College fields: department, semester, backlogs, hostel status, mentor notes.
-- Live risk preview while editing, so the effect of each indicator is visible.
+- Search by name or student ID.
+- Filter by institution type and risk category.
+- Paginated table with attendance, marks, fees, risk score, and risk category.
+- Add and edit demo records with a live risk preview.
+- Uploaded dataset rows are read-only inside the app, preserving the source data.
 
 ### Risk prediction
-- Shows the complete scoring rubric, weights, and thresholds.
-- Risk explorer lets staff pick any student and see the contributing factors.
-- Each factor lists the evidence (attendance %, marks, fees, backlogs, remarks) and points awarded.
-- Every screen clearly labels the model as illustrative and rule-based.
+- ML mode shows the dropout probability returned by the trained model, the predicted outcome, and per-class confidence.
+- Demo mode shows the full transparent scoring rubric and the exact reasons behind each score.
+- Search and filter the student risk list; open a profile or assign an intervention directly.
 
 ### Student profile
-- Personal and institution details, attendance, marks, fee status, backlogs, and hostel status.
-- Risk score and category with a visual meter.
-- Key risk factors with reasons and severity.
-- Recommended interventions based on the detected factors.
-- Intervention history and a progress history chart.
+- Institution and enrolment details.
+- Attendance, marks, fees, backlogs, hostel status, and other available indicators.
+- Risk score or ML dropout probability with a visual meter.
+- Contributing factors, recommended interventions, and intervention history.
+- Progress history chart with before/after check-ins.
 
 ### Intervention management
-- Assign interventions: Parent Call, Remedial Classes, Scholarship Assistance, Mentor Meeting, or Counselling.
-- Add notes, owner, and due date.
-- Update status inline: Pending → In Progress → Completed.
-- Filter by status, type, or institution.
+- Assign Parent Call, Remedial Classes, Scholarship Assistance, Mentor Meeting, or Counselling.
+- Add notes, assign dates, and update status: Pending → In Progress → Completed.
+- Filter by status, intervention type, or institution.
 
 ### Progress tracking
-- Record a new attendance/marks update for any student.
-- Before/after comparison cards with improved/declined indicators.
-- Cohort-level statistics and a comparison chart.
-- Full update history per student, with same-date entries replacing the previous one.
+- Record new attendance and marks values for any student.
+- Before/after comparison cards with improved, declined, or mixed indicators.
+- Trend chart and full check-in history.
+- Same-date check-ins replace the earlier entry instead of duplicating it.
 
-### Data & persistence
-- 60 fictional sample students (30 schools, 30 colleges) with varied indicators.
-- Seeded historical snapshots and interventions so the demo is populated on first load.
-- All changes persist in `localStorage` under `eduguard.students.v2`.
-- "Reset demo data" restores the original sample set.
+### Dataset upload
+- Drag-free file picker with CSV/XLSX validation messages.
+- Active dataset summary and the full prediction results table.
+- Remove the active dataset and restore demo mode from the sidebar.
 
 ---
 
-## Risk model at a glance
+## Risk logic
+
+### ML mode
+
+The trained model in `ml-analysis/model/eduguard_model.pkl` returns a dropout probability (0–100). The app maps it to:
+
+| Score | Category |
+| --- | --- |
+| 0–30 | Low |
+| 31–60 | Medium |
+| 61–100 | High |
+
+The upload response also includes the predicted outcome (`Dropout`, `Enrolled`, or `Graduate`) and confidence for each class.
+
+### Demo / fallback mode
+
+When no dataset is active, the original rule-based engine scores the demo students:
 
 | Rule | Condition | Points |
 | --- | --- | --- |
@@ -89,15 +202,7 @@ npm run preview
 | Negative mentor note | Flagged language in mentor notes | 10 |
 | Personal/financial difficulty | Wellbeing or finance language | 5 |
 
-The total is capped at 100.
-
-| Score | Category |
-| --- | --- |
-| 0–30 | Low |
-| 31–60 | Medium |
-| 61–100 | High |
-
-The engine also maps detected factors to suggested interventions and exposes a per-factor explanation so staff can audit the result.
+The total is capped at 100 and uses the same Low / Medium / High thresholds.
 
 ---
 
@@ -107,33 +212,33 @@ The engine also maps detected factors to suggested interventions and exposes a p
 index.html
 package.json
 vite.config.js
+public/
+  studentDataset.csv        Sample upload file
 src/
-  main.jsx                 App entry
-  App.jsx                  Hash router and page metadata
-  index.css                Style entry point
-  components/              Reusable UI pieces
-    Sidebar.jsx            Navigation + mobile drawer
-    Topbar.jsx             Header, search, institution context
-    Layout.jsx             App shell
-    StatCard.jsx           Dashboard KPI cards
-    RiskBadge.jsx          Low/Medium/High badge
-    Avatar.jsx             Initials avatar
-    Modal.jsx              Accessible modal shell
-    StudentForm.jsx        Add/edit form with live risk preview
-    StudentTable.jsx       Student list table
+  main.jsx                  App entry
+  App.jsx                   Hash router and page metadata
+  index.css                 Style entry point
+  components/               Reusable UI pieces
+    Sidebar.jsx             Navigation + mobile drawer
+    Topbar.jsx              Header, alerts, user
+    Layout.jsx              App shell
+    DatasetUpload.jsx       Dataset upload + prediction results
+    StudentForm.jsx         Add/edit form with live risk preview
+    StudentTable.jsx        Student list table
     AssignInterventionModal.jsx
-    ProgressModal.jsx      Attendance/marks update form
-    InterventionIcon.jsx   Icon per intervention type
-    PageHeader.jsx         Page title block
+    ProgressModal.jsx       Attendance/marks check-in form
+    ...                     Cards, badges, modal, avatar, icons
   context/
-    AppContext.jsx         CRUD, persistence, derived scores
+    AppContext.jsx          CRUD, dataset restore, persistence
   data/
-    sampleStudents.js      Deterministic sample records + history
+    sampleStudents.js       Deterministic 60-student demo cohort
   lib/
-    riskEngine.js          Rule-based scoring and recommendations
-    storage.js             LocalStorage read/write
-    progress.js            Before/after calculations
-    format.js              Date/number/label helpers
+    api.js                  Flask API client
+    dataset.js              Dataset → student record mapping
+    riskEngine.js           Rule-based scoring and recommendations
+    storage.js              LocalStorage persistence
+    progress.js             Before/after calculations
+    format.js               Date/number helpers
   pages/
     Dashboard.jsx
     Students.jsx
@@ -142,10 +247,31 @@ src/
     Interventions.jsx
     ProgressTracking.jsx
   styles/
-    base.css               Theme, shell, sidebar, forms, modal
-    components.css         Cards, tables, badges, charts
-    pages.css              Page layouts + responsive rules
+    base.css                Theme, shell, sidebar, forms, modal
+    components.css          Cards, tables, badges, charts
+    pages.css               Page layouts + responsive rules
+ml-analysis/
+  app.py                    Flask API
+  generate_data.py          Synthetic dataset generator (training data + sample file)
+  train_model.py            Trains and saves the model bundle
+  requirements.txt          Python dependencies
+  model/eduguard_model.pkl  Trained model bundle
+  data/studentDataset.csv   Training dataset
+  notebooks/analysis.ipynb  Model training / analysis notebook
+  eduguard.db               Active dataset storage (generated)
 ```
+
+---
+
+## API endpoints
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/` | Health message |
+| `POST` | `/predict` | Predict one student from JSON |
+| `POST` | `/upload-dataset` | Validate a CSV/XLSX, run predictions, save the dataset |
+| `GET` | `/active-dataset` | Restore the active dataset and predictions |
+| `DELETE` | `/active-dataset` | Clear the active dataset |
 
 ---
 
@@ -153,16 +279,17 @@ src/
 
 - React 18 + Vite 5
 - Plain JavaScript (JSX)
-- CSS with custom properties (no UI framework)
+- CSS custom properties, no UI framework
 - Recharts for charts
 - Lucide React for icons
-- Browser `localStorage` for persistence
+- Flask, pandas, scikit-learn, joblib, SQLite
+- Browser `localStorage` for the demo cohort and active-dataset cache
 
 ---
 
-## Notes for reviewers
+## Notes
 
-- The app is a single-page app using hash routes, so deep links such as `#/student/STU-1001` work after a refresh and on static hosting.
-- Sample data is generated with a seeded random function, so every fresh install shows the same demo cohort.
-- Clearing site data or using the in-app reset restores the demo dataset.
-- The only build warning is Vite's chunk-size advisory caused by the Recharts dependency; it does not affect functionality.
+- Routes are hash-based, so deep links such as `#/student/STU-1001` survive refresh and work on static hosting.
+- The Flask backend is the source of truth for an active uploaded dataset; a local cache keeps it visible if the API is temporarily unavailable.
+- Demo data is generated with a seeded random function, so a fresh install always shows the same 60 students.
+- The build emits a Vite chunk-size advisory because Recharts is large; it does not affect functionality.

@@ -16,8 +16,27 @@ import { useApp } from '../context/AppContext.jsx'
 
 const PAGE_SIZE = 10
 
+function pageWindow(current, total) {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, index) => index + 1)
+  }
+
+  const pages = [1]
+  if (current > 4) pages.push('start-gap')
+
+  const start = Math.max(2, current - 1)
+  const end = Math.min(total - 1, current + 1)
+  for (let number = start; number <= end; number += 1) {
+    pages.push(number)
+  }
+
+  if (current < total - 3) pages.push('end-gap')
+  pages.push(total)
+  return pages
+}
+
 export default function Students({ navigate }) {
-  const { students, addStudent, updateStudent } = useApp()
+  const { students, activeDataset, addStudent, updateStudent } = useApp()
   const [search, setSearch] = useState('')
   const [institution, setInstitution] = useState('All')
   const [risk, setRisk] = useState('All')
@@ -39,6 +58,12 @@ export default function Students({ navigate }) {
       })
       .sort((a, b) => a.id.localeCompare(b.id))
   }, [students, search, institution, risk])
+
+  const institutionOptions = useMemo(
+    () =>
+      [...new Set(students.map((student) => student.institutionType).filter(Boolean))].sort(),
+    [students],
+  )
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const safePage = Math.min(page, totalPages)
@@ -72,9 +97,13 @@ export default function Students({ navigate }) {
   return (
     <>
       <PageHeader
-        eyebrow="Student records"
+        eyebrow={activeDataset ? `Active dataset · ${activeDataset.filename}` : 'Student records'}
         title="Student management"
-        subtitle="Search, filter and maintain every school and college record in one place."
+        subtitle={
+          activeDataset
+            ? 'Every row below comes from the active uploaded dataset.'
+            : 'Search, filter and maintain every school and college record in one place.'
+        }
         actions={
           <button type="button" className="btn btn-primary" onClick={openAdd}>
             <Plus size={17} />
@@ -122,8 +151,11 @@ export default function Students({ navigate }) {
               aria-label="Filter by institution type"
             >
               <option value="All">All institutions</option>
-              <option value="School">School</option>
-              <option value="College">College</option>
+              {institutionOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -181,18 +213,24 @@ export default function Students({ navigate }) {
             >
               <ChevronLeft size={17} />
             </button>
-            {Array.from({ length: totalPages }, (_, index) => index + 1).map((number) => (
-              <button
-                key={number}
-                type="button"
-                className={`page-number ${number === safePage ? 'active' : ''}`}
-                onClick={() => setPage(number)}
-                aria-label={`Go to page ${number}`}
-                aria-current={number === safePage ? 'page' : undefined}
-              >
-                {number}
-              </button>
-            ))}
+            {pageWindow(safePage, totalPages).map((number) =>
+              typeof number === 'number' ? (
+                <button
+                  key={number}
+                  type="button"
+                  className={`page-number ${number === safePage ? 'active' : ''}`}
+                  onClick={() => setPage(number)}
+                  aria-label={`Go to page ${number}`}
+                  aria-current={number === safePage ? 'page' : undefined}
+                >
+                  {number}
+                </button>
+              ) : (
+                <span key={number} className="page-gap" aria-hidden="true">
+                  …
+                </span>
+              ),
+            )}
             <button
               type="button"
               className="icon-btn icon-btn-soft"

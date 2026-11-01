@@ -147,8 +147,9 @@ export default function ProgressModal({ open = true, onClose, student }) {
 
         <div className="progress-hint">
           <TrendingUp size={17} />
-          Saving this check-in recalculates the risk score and adds a before/after point to the
-          progress chart.
+          {student.dataSource === 'dataset'
+            ? 'Saving this check-in adds a before/after point to the progress chart. The ML prediction stays fixed to the uploaded dataset until a new dataset is uploaded.'
+            : 'Saving this check-in recalculates the risk score and adds a before/after point to the progress chart.'}
         </div>
 
         <div className="form-actions">

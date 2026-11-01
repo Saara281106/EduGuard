@@ -240,6 +240,12 @@
   color: #0f8a60;
 }
 
+.type-other,
+.type-not-specified {
+  background: #eef2f7;
+  color: #475569;
+}
+
 .fee-chip {
   display: inline-flex;
   padding: 4px 8px;
@@ -262,6 +268,11 @@
 .fee-pending {
   background: var(--red-soft);
   color: #b42323;
+}
+
+.fee-unknown {
+  background: #eef2f7;
+  color: #475569;
 }
 
 .score-text {
@@ -663,6 +674,13 @@
   border-color: var(--blue-600);
   background: var(--blue-600);
   color: #fff;
+}
+
+.page-gap {
+  width: 22px;
+  color: #9aafc5;
+  font-size: 11px;
+  text-align: center;
 }
 
 /* ---------- Risk meter & factors ---------- */

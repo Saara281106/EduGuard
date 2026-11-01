@@ -107,7 +107,7 @@ function ProgressTooltip({ active, payload }) {
 }
 
 export default function ProgressTracking() {
-  const { students } = useApp()
+  const { students, activeDataset } = useApp()
   const [selectedId, setSelectedId] = useState(students[0]?.id || '')
   const [progressOpen, setProgressOpen] = useState(false)
 
@@ -184,9 +184,13 @@ export default function ProgressTracking() {
   return (
     <>
       <PageHeader
-        eyebrow="Before & after"
+        eyebrow={activeDataset ? `Active dataset · ${activeDataset.filename}` : 'Before & after'}
         title="Progress tracking"
-        subtitle="Record updated attendance and marks, then review whether indicators improved."
+        subtitle={
+          activeDataset
+            ? 'Track changes for students in the active uploaded dataset. The upload itself provides the baseline snapshot.'
+            : 'Record updated attendance and marks, then review whether indicators improved.'
+        }
         actions={
           <button type="button" className="btn btn-primary" onClick={() => setProgressOpen(true)}>
             <Plus size={17} />
@@ -266,9 +270,11 @@ export default function ProgressTracking() {
                 <h2>{selected.name}</h2>
                 <p>
                   {selected.id} ·{' '}
-                  {selected.institutionType === 'School'
-                    ? `Class ${selected.className}-${selected.section}`
-                    : `${selected.department}, Semester ${selected.semester}`}
+                  {selected.dataSource === 'dataset'
+                    ? activeDataset?.filename || selected.institutionName
+                    : selected.institutionType === 'School'
+                      ? `Class ${selected.className}-${selected.section}`
+                      : `${selected.department}, Semester ${selected.semester}`}
                 </p>
               </div>
               <RiskBadge category={selected.riskCategory} score={selected.riskScore} />
@@ -478,7 +484,9 @@ export default function ProgressTracking() {
               </li>
               <li>
                 <CheckCircle2 size={15} />
-                Risk recalculates automatically after saving.
+                {selected.dataSource === 'dataset'
+                  ? 'The ML prediction stays fixed until a new dataset is uploaded.'
+                  : 'Risk recalculates automatically after saving.'}
               </li>
               <li>
                 <CheckCircle2 size={15} />

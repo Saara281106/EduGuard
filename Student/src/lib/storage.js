@@ -2,6 +2,7 @@ import { createSampleStudents } from '../data/sampleStudents.js'
 import { todayISO } from './format.js'
 
 const STORAGE_KEY = 'eduguard.students.v2'
+const DATASET_CACHE_KEY = 'eduguard.activeDataset.v1'
 
 function normalizeStudent(student) {
   const attendance = Number(student.attendance) || 0
@@ -57,5 +58,43 @@ export function clearStoredStudents() {
     localStorage.removeItem(STORAGE_KEY)
   } catch (error) {
     console.warn('Could not clear EduGuard data.', error)
+  }
+}
+
+/**
+ * The Flask backend is the source of truth for the active uploaded dataset.
+ * This small cache lets the UI restore the same dataset instantly on reload
+ * (and keeps it visible if the backend is temporarily unavailable).
+ */
+export function loadActiveDatasetCache() {
+  try {
+    const raw = localStorage.getItem(DATASET_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed?.dataset?.id && Array.isArray(parsed.students) && parsed.students.length) {
+      return parsed
+    }
+  } catch (error) {
+    console.warn('Could not read the active dataset cache.', error)
+  }
+  return null
+}
+
+export function saveActiveDatasetCache(dataset, students) {
+  try {
+    localStorage.setItem(
+      DATASET_CACHE_KEY,
+      JSON.stringify({ dataset, students }),
+    )
+  } catch (error) {
+    console.warn('Could not cache the active dataset.', error)
+  }
+}
+
+export function clearActiveDatasetCache() {
+  try {
+    localStorage.removeItem(DATASET_CACHE_KEY)
+  } catch (error) {
+    console.warn('Could not clear the active dataset cache.', error)
   }
 }

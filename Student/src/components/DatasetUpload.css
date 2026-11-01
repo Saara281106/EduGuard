@@ -1,0 +1,179 @@
+
+.dataset-upload {
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  max-width: 1100px;
+  margin: 30px auto;
+  text-align: center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+}
+
+.dataset-upload h2 {
+  color: #172554;
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.dataset-upload p {
+  color: #64748b;
+  margin-bottom: 20px;
+}
+
+.dataset-upload input[type="file"] {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  margin: 20px 0;
+  border: 2px dashed #93c5fd;
+  border-radius: 10px;
+  background: #f8fafc;
+  cursor: pointer;
+}
+
+.dataset-upload button {
+  background: #2563eb;
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.dataset-upload button:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.dataset-upload button:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+
+
+.upload-status {
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+.upload-status.success {
+  color: #15803d;
+}
+
+.upload-status.error {
+  color: #dc2626;
+}
+
+
+/* Upload controls */
+
+.upload-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  margin-top: 20px;
+}
+
+/* Upload status messages */
+
+.upload-status {
+  font-size: 14px;
+  margin-top: 12px;
+}
+
+.upload-status.success {
+  color: #15803d;
+}
+
+.upload-status.error {
+  color: #dc2626;
+}
+
+/* Prediction results section */
+
+.prediction-results {
+  margin-top: 32px;
+  width: 100%;
+}
+
+.prediction-header {
+  margin-bottom: 16px;
+}
+
+.prediction-header h3 {
+  margin-bottom: 8px;
+}
+
+.prediction-header p {
+  font-size: 14px;
+}
+
+/* Scrollable table */
+
+.prediction-table-container {
+  width: 100%;
+  max-height: 600px;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+}
+
+.prediction-table {
+  width: 100%;
+  min-width: 700px;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.prediction-table th,
+.prediction-table td {
+  padding: 14px 16px;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  white-space: nowrap;
+}
+
+.prediction-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #334155;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.prediction-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.prediction-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Outcome badges */
+
+.outcome-badge {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.outcome-dropout {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.outcome-graduate {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.outcome-other {
+  background: #e0f2fe;
+  color: #0369a1;
+}

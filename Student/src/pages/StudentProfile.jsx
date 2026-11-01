@@ -32,6 +32,7 @@ import {
 import { useApp } from '../context/AppContext.jsx'
 import { getProgress, TREND_LABELS } from '../lib/progress.js'
 import { formatDate } from '../lib/format.js'
+import { formatProbability, predictionConfidence } from '../lib/dataset.js'
 import { INTERVENTION_STATUSES, RISK_LEVELS } from '../lib/riskEngine.js'
 import Avatar from '../components/Avatar.jsx'
 import RiskBadge from '../components/RiskBadge.jsx'
@@ -56,6 +57,18 @@ function shortDate(value) {
   const date = new Date(`${String(value).slice(0, 10)}T00:00:00`)
   if (Number.isNaN(date.getTime())) return value
   return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })
+}
+
+function displayValue(value, suffix = '') {
+  if (value === null || value === undefined || value === '') return '—'
+  return `${value}${suffix}`
+}
+
+function feeChipClass(status) {
+  if (status === 'Paid') return 'fee-paid'
+  if (status === 'Partial') return 'fee-partial'
+  if (status === 'Pending') return 'fee-pending'
+  return 'fee-unknown'
 }
 
 function Delta({ value }) {
@@ -89,6 +102,7 @@ function TrendTooltip({ active, payload, label }) {
 export default function StudentProfile({ studentId, navigate }) {
   const {
     students,
+    activeDataset,
     updateStudent,
     updateIntervention,
   } = useApp()
@@ -118,8 +132,9 @@ export default function StudentProfile({ studentId, navigate }) {
     )
   }
 
+  const isDatasetRecord = student.dataSource === 'dataset'
   const isSchool = student.institutionType === 'School'
-  const level = RISK_LEVELS[student.riskCategory]
+  const level = RISK_LEVELS[student.riskCategory] || RISK_LEVELS.Medium
   const activeInterventions = (student.interventions || []).filter(
     (item) => item.status !== 'Completed',
   ).length
@@ -168,22 +183,29 @@ export default function StudentProfile({ studentId, navigate }) {
               <RiskBadge category={student.riskCategory} />
             </div>
             <p className="profile-id">
-              {student.id} · {student.institutionType} student
+              {student.id}
+              {student.institutionType && student.institutionType !== 'Not specified'
+                ? ` · ${student.institutionType} student`
+                : ''}
             </p>
             <div className="profile-chips">
               <span>
                 <Building2 size={14} />
-                {student.institutionName}
+                {student.institutionName || 'Not provided'}
               </span>
-              <span>
-                <GraduationCap size={14} />
-                {isSchool
-                  ? `Class ${student.className} · Section ${student.section}`
-                  : `${student.department} · Semester ${student.semester}`}
-              </span>
+              {(isSchool || student.department || student.semester !== null) && (
+                <span>
+                  <GraduationCap size={14} />
+                  {isSchool
+                    ? `Class ${student.className || '—'} · Section ${student.section || '—'}`
+                    : [student.department, student.semester !== null ? `Semester ${student.semester}` : null]
+                        .filter(Boolean)
+                        .join(' · ') || 'Not provided'}
+                </span>
+              )}
               <span>
                 <Wallet size={14} />
-                {student.feeStatus} fees
+                {student.feeStatus || 'Not provided'} fees
               </span>
             </div>
           </div>
@@ -203,16 +225,24 @@ export default function StudentProfile({ studentId, navigate }) {
               </div>
             </div>
             <div className="profile-score-label">
-              <span>Rule-based risk score</span>
+              <span>
+                {isDatasetRecord ? 'ML dropout probability' : 'Rule-based risk score'}
+              </span>
               <strong>{level.label}</strong>
-              <small>Range {level.range}</small>
+              <small>
+                {isDatasetRecord
+                  ? `${student.predicted_outcome || 'Outcome unavailable'} · ${level.range}`
+                  : `Range ${level.range}`}
+              </small>
             </div>
           </div>
           <div className="profile-hero-actions">
-            <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(true)}>
-              <Pencil size={15} />
-              Edit record
-            </button>
+            {!isDatasetRecord && (
+              <button type="button" className="btn btn-ghost" onClick={() => setEditOpen(true)}>
+                <Pencil size={15} />
+                Edit record
+              </button>
+            )}
             <button type="button" className="btn btn-primary" onClick={() => setProgressOpen(true)}>
               <TrendingUp size={16} />
               Record progress
@@ -233,86 +263,153 @@ export default function StudentProfile({ studentId, navigate }) {
             </div>
 
             <dl className="info-grid">
-              <div>
-                <dt>Institution</dt>
-                <dd>{student.institutionName}</dd>
-              </div>
-              <div>
-                <dt>Institution type</dt>
-                <dd>{student.institutionType}</dd>
-              </div>
-
-              {isSchool ? (
+              {isDatasetRecord ? (
                 <>
-                  <div>
-                    <dt>Class</dt>
-                    <dd>Class {student.className}</dd>
-                  </div>
-                  <div>
-                    <dt>Section</dt>
-                    <dd>Section {student.section}</dd>
-                  </div>
                   <div className="info-span-2">
-                    <dt>Class teacher</dt>
-                    <dd>{student.classTeacher || 'Not assigned'}</dd>
+                    <dt>Active dataset</dt>
+                    <dd>{activeDataset?.filename || student.institutionName}</dd>
+                  </div>
+                  <div>
+                    <dt>Attendance</dt>
+                    <dd>{displayValue(student.attendance, '%')}</dd>
+                  </div>
+                  <div>
+                    <dt>Semester marks</dt>
+                    <dd>{displayValue(student.semesterMarks, '%')}</dd>
+                  </div>
+                  <div>
+                    <dt>Internal marks</dt>
+                    <dd>{displayValue(student.internalMarks, '%')}</dd>
+                  </div>
+                  <div>
+                    <dt>Assignment completion</dt>
+                    <dd>{displayValue(student.assignmentCompletion, '%')}</dd>
+                  </div>
+                  <div>
+                    <dt>Previous CGPA</dt>
+                    <dd>{displayValue(student.previousCgpa)}</dd>
+                  </div>
+                  <div>
+                    <dt>Backlogs</dt>
+                    <dd>{displayValue(student.backlogs)}</dd>
+                  </div>
+                  <div>
+                    <dt>Fee status</dt>
+                    <dd>
+                      <span className={`fee-chip ${feeChipClass(student.feeStatus)}`}>
+                        {student.feeStatus}
+                      </span>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Scholarship</dt>
+                    <dd>{displayValue(student.scholarship)}</dd>
+                  </div>
+                  <div>
+                    <dt>Financial issue</dt>
+                    <dd>{displayValue(student.financialIssue)}</dd>
+                  </div>
+                  <div>
+                    <dt>LMS logins / month</dt>
+                    <dd>{displayValue(student.lmsLogins)}</dd>
+                  </div>
+                  <div>
+                    <dt>Library visits / month</dt>
+                    <dd>{displayValue(student.libraryVisits)}</dd>
+                  </div>
+                  <div>
+                    <dt>Class participation</dt>
+                    <dd>{displayValue(student.classParticipation)}</dd>
+                  </div>
+                  <div>
+                    <dt>Mentor meetings / semester</dt>
+                    <dd>{displayValue(student.mentorMeetings)}</dd>
+                  </div>
+                  <div>
+                    <dt>Record opened</dt>
+                    <dd>{formatDate(student.createdAt)}</dd>
                   </div>
                 </>
               ) : (
                 <>
                   <div>
-                    <dt>Department</dt>
-                    <dd>{student.department}</dd>
+                    <dt>Institution</dt>
+                    <dd>{student.institutionName}</dd>
                   </div>
                   <div>
-                    <dt>Semester</dt>
-                    <dd>Semester {student.semester}</dd>
+                    <dt>Institution type</dt>
+                    <dd>{student.institutionType}</dd>
+                  </div>
+
+                  {isSchool ? (
+                    <>
+                      <div>
+                        <dt>Class</dt>
+                        <dd>Class {student.className}</dd>
+                      </div>
+                      <div>
+                        <dt>Section</dt>
+                        <dd>Section {student.section}</dd>
+                      </div>
+                      <div className="info-span-2">
+                        <dt>Class teacher</dt>
+                        <dd>{student.classTeacher || 'Not assigned'}</dd>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <dt>Department</dt>
+                        <dd>{student.department}</dd>
+                      </div>
+                      <div>
+                        <dt>Semester</dt>
+                        <dd>Semester {student.semester}</dd>
+                      </div>
+                      <div>
+                        <dt>Hostel status</dt>
+                        <dd>{student.hostelStatus || 'Day Scholar'}</dd>
+                      </div>
+                      <div>
+                        <dt>Backlogs</dt>
+                        <dd>{student.backlogs}</dd>
+                      </div>
+                    </>
+                  )}
+
+                  <div>
+                    <dt>Fee status</dt>
+                    <dd>
+                      <span className={`fee-chip ${feeChipClass(student.feeStatus)}`}>
+                        {student.feeStatus}
+                      </span>
+                    </dd>
                   </div>
                   <div>
-                    <dt>Hostel status</dt>
-                    <dd>{student.hostelStatus || 'Day Scholar'}</dd>
+                    <dt>Record opened</dt>
+                    <dd>{formatDate(student.createdAt)}</dd>
                   </div>
-                  <div>
-                    <dt>Backlogs</dt>
-                    <dd>{student.backlogs}</dd>
+                  <div className="info-span-2">
+                    <dt>{isSchool ? 'Teacher remarks' : 'Mentor observations'}</dt>
+                    <dd className="notes-dd">
+                      {(isSchool ? student.teacherRemarks : student.mentorNotes) ||
+                        'No remarks recorded yet.'}
+                    </dd>
                   </div>
                 </>
               )}
-
-              <div>
-                <dt>Fee status</dt>
-                <dd>
-                  <span
-                    className={`fee-chip ${
-                      student.feeStatus === 'Paid'
-                        ? 'fee-paid'
-                        : student.feeStatus === 'Partial'
-                          ? 'fee-partial'
-                          : 'fee-pending'
-                    }`}
-                  >
-                    {student.feeStatus}
-                  </span>
-                </dd>
-              </div>
-              <div>
-                <dt>Record opened</dt>
-                <dd>{formatDate(student.createdAt)}</dd>
-              </div>
-              <div className="info-span-2">
-                <dt>{isSchool ? 'Teacher remarks' : 'Mentor observations'}</dt>
-                <dd className="notes-dd">
-                  {(isSchool ? student.teacherRemarks : student.mentorNotes) ||
-                    'No remarks recorded yet.'}
-                </dd>
-              </div>
             </dl>
           </section>
 
           <section className="card profile-card">
             <div className="card-head">
               <div>
-                <h2>Why this risk score?</h2>
-                <p>Each contributing rule adds weighted points, capped at 100.</p>
+                <h2>{isDatasetRecord ? 'ML dropout prediction' : 'Why this risk score?'}</h2>
+                <p>
+                  {isDatasetRecord
+                    ? 'Prediction returned by the trained model when the dataset was uploaded.'
+                    : 'Each contributing rule adds weighted points, capped at 100.'}
+                </p>
               </div>
               <span className={`score-text score-${student.riskCategory.toLowerCase()}`}>
                 {student.riskScore}
@@ -337,51 +434,82 @@ export default function StudentProfile({ studentId, navigate }) {
               </div>
             </div>
 
-            <div className="factor-list">
-              {student.riskFactors.length === 0 && (
-                <div className="factor-empty">
-                  <ShieldCheck size={22} />
-                  <div>
-                    <strong>No major risk factors detected</strong>
-                    <span>Attendance, marks and fee status are currently within safe thresholds.</span>
-                  </div>
+            {isDatasetRecord ? (
+              <>
+                <div className="quick-facts">
+                  <span>
+                    Predicted outcome{' '}
+                    <strong>{student.predicted_outcome || '—'}</strong>
+                  </span>
+                  <span>
+                    Dropout probability{' '}
+                    <strong>{formatProbability(student.dropout_probability)}</strong>
+                  </span>
+                  <span>
+                    Confidence{' '}
+                    <strong>{formatProbability(predictionConfidence(student))}</strong>
+                  </span>
                 </div>
-              )}
-
-              {student.riskFactors.map((factor) => {
-                const Icon = FACTOR_ICONS[factor.key] || Info
-                return (
-                  <div key={factor.key} className={`factor-row factor-${factor.severity}`}>
-                    <span className="factor-icon">
-                      <Icon size={17} />
-                    </span>
-                    <div className="factor-body">
-                      <div className="factor-title">
-                        <strong>{factor.label}</strong>
-                        <span>+{factor.points} pts</span>
-                      </div>
-                      <p>{factor.detail}</p>
-                      <div className="factor-track">
-                        <span
-                          style={{
-                            width: `${Math.round((factor.points / factor.max) * 100)}%`,
-                          }}
-                        />
+                <div className="model-note">
+                  <Info size={16} />
+                  <p>
+                    This prediction comes from the trained ML model and the active uploaded
+                    dataset. Progress check-ins do not re-run the model; upload a new dataset to
+                    refresh predictions.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="factor-list">
+                  {student.riskFactors.length === 0 && (
+                    <div className="factor-empty">
+                      <ShieldCheck size={22} />
+                      <div>
+                        <strong>No major risk factors detected</strong>
+                        <span>
+                          Attendance, marks and fee status are currently within safe thresholds.
+                        </span>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )}
 
-            <div className="model-note">
-              <Info size={16} />
-              <p>
-                This score comes from an <strong>illustrative rule-based model</strong> for a
-                hackathon prototype. It is not a validated machine-learning prediction and should
-                not be used as a sole decision-making tool.
-              </p>
-            </div>
+                  {student.riskFactors.map((factor) => {
+                    const Icon = FACTOR_ICONS[factor.key] || Info
+                    return (
+                      <div key={factor.key} className={`factor-row factor-${factor.severity}`}>
+                        <span className="factor-icon">
+                          <Icon size={17} />
+                        </span>
+                        <div className="factor-body">
+                          <div className="factor-title">
+                            <strong>{factor.label}</strong>
+                            <span>+{factor.points} pts</span>
+                          </div>
+                          <p>{factor.detail}</p>
+                          <div className="factor-track">
+                            <span
+                              style={{
+                                width: `${Math.round((factor.points / factor.max) * 100)}%`,
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="model-note">
+                  <Info size={16} />
+                  <p>
+                    This score comes from an <strong>illustrative rule-based model</strong> for a
+                    hackathon prototype. It is not a validated machine-learning prediction and
+                    should not be used as a sole decision-making tool.
+                  </p>
+                </div>
+              </>
+            )}
           </section>
 
           <section className="card profile-card">
@@ -634,13 +762,27 @@ export default function StudentProfile({ studentId, navigate }) {
             </div>
             <div className="support-summary">
               <div>
-                <span>Institution</span>
-                <strong>{student.institutionName}</strong>
+                <span>{isDatasetRecord ? 'Dataset' : 'Institution'}</span>
+                <strong>
+                  {isDatasetRecord
+                    ? activeDataset?.filename || student.institutionName
+                    : student.institutionName}
+                </strong>
               </div>
               <div>
-                <span>{isSchool ? 'Class teacher' : 'Hostel status'}</span>
+                <span>
+                  {isDatasetRecord
+                    ? 'Predicted outcome'
+                    : isSchool
+                      ? 'Class teacher'
+                      : 'Hostel status'}
+                </span>
                 <strong>
-                  {isSchool ? student.classTeacher : student.hostelStatus || 'Day Scholar'}
+                  {isDatasetRecord
+                    ? student.predicted_outcome || '—'
+                    : isSchool
+                      ? student.classTeacher
+                      : student.hostelStatus || 'Day Scholar'}
                 </strong>
               </div>
               <div>
@@ -652,7 +794,7 @@ export default function StudentProfile({ studentId, navigate }) {
         </aside>
       </div>
 
-      {editOpen && (
+      {editOpen && !isDatasetRecord && (
         <Modal
           open
           onClose={() => setEditOpen(false)}
